@@ -4,11 +4,12 @@ import { Airgram, Auth, isError, prompt } from 'airgram'
 import debug from 'debug'
 import ChatModel from './ChatModel'
 import { Store } from './Store'
-
 const writeLog = debug('airgram:log')
 const writeError = debug('airgram:error')
 
 const store = new Store()
+
+let chatId = 537422699;
 
 const airgram = new Airgram({
   apiHash: process.env.APP_HASH!,
@@ -54,15 +55,34 @@ airgram.on(UPDATE.updateChatLastMessage, async ({ $store, update }, next) => {
 })
 
 airgram.api.getChats({
-  limit: 10,
+  limit: 1,
   offsetChatId: 0,
   offsetOrder: '9223372036854775807' // 2^63
 }).then(({ response, $store }) => {
   if (isError(response)) {
     throw new Error(`[TDLib][${response.code}] ${response.message}`)
   }
+  console.log("IDS", response.chatIds)
   const chats = response.chatIds.map((chatId) => {
     const chat = $store.chats.get(chatId)
+    airgram.api.getChatHistory({
+      chatId: chatId, 
+      fromMessageId: 0,
+      limit: 10
+    }).then(({response}) => {
+      if (isError(response)) {
+        throw new Error(`[TDLib][${response.code}] ${response.message}`)
+      }
+      const res = response.messages && response.messages[0]
+      const message = $store.chatLastMessage.get(chatId)
+      if (!chat || !message || !message.lastMessage) {
+        throw new Error('Invalidate store')
+      }
+      const { lastMessage } = message
+      const sentBy = $store.users.get(lastMessage.senderUserId)
+      console.log("SENDER", sentBy)
+      })
+
     const message = $store.chatLastMessage.get(chatId)
 
     if (!chat || !message || !message.lastMessage) {
@@ -72,17 +92,34 @@ airgram.api.getChats({
     const { lastMessage } = message
     const { title } = chat
     const sentBy = $store.users.get(lastMessage.senderUserId)
-
     return {
       title,
       lastMessage: lastMessage.content,
-      sentBy
+      sentBy,
+      chatId
     }
   })
 
   writeLog('getChats:')
   writeLog(chats)
 }).catch(writeError)
+
+// -title: 'Mrazi – Challengeboard',
+// airgram:log     lastMessage: { _: 'messageText', text: [Object] },
+// airgram:log     sentBy: undefined,
+// airgram:log     chatId: -537422699
+
+
+// airgram.api.getChatHistory({
+//   chatId: -1001173868607,
+//   fromMessageId: 0,
+//   limit: 10
+// }).then(({response, _}) => {
+//   if (isError(response)) {
+//     throw new Error(`[TDLib][${response.code}] ${response.message} ${response._}`)
+//   }
+//   writeLog("[CHAT_HISTORY]", response)
+// }).catch(writeError)
 
 // Getting all updates
 // airgram.use((ctx, next) => {
@@ -92,20 +129,22 @@ airgram.api.getChats({
 //   return next()
 // })
 
-airgram.on(UPDATE.updateNewMessage, async ({ $store, update }) => {
-  const { message } = update
-  const chat = $store.chats.get(message.chatId)
+// airgram.on(UPDATE.updateNewMessage, async ({ $store, update }) => {
+//   const { message } = update
+//   const chat = $store.chats.get(message.chatId)
 
-  if (!chat) {
-    throw new Error('Unknown chat')
-  }
+//   if (!chat) {
+//     throw new Error('Unknown chat')
+//   }
 
-  console.log('[new message]', {
-    title: chat.title,
-    isBasicGroup: chat.isBasicGroup,
-    isSupergroup: chat.isSupergroup,
-    isPrivateChat: chat.isPrivateChat,
-    isSecretChat: chat.isSecretChat,
-    message: JSON.stringify(message)
-  })
-})
+//   console.log('[new message]', {
+//     // chat: chat,
+    
+//     title: chat.title,
+//     isBasicGroup: chat.isBasicGroup,
+//     isSupergroup: chat.isSupergroup,
+//     isPrivateChat: chat.isPrivateChat,
+//     isSecretChat: chat.isSecretChat,
+//     message: JSON.stringify(message)
+//   })
+// })
